@@ -1,0 +1,205 @@
+@*
+ * This template is called from the `index` template. This template
+ * handles the rendering of the page header and body tags. It takes
+ * two arguments, a `String` for the title of the page and an `Html`
+ * object to insert into the body of the page.
+ *@
+@(title: String)(content: Html)
+
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+
+        @* Here's where we render the page title `String`. *@
+        <title>@title</title>
+        <link rel="stylesheet" media="screen" href="@routes.Assets.versioned("stylesheets/main.css")">
+        <link rel="shortcut icon" type="image/png" href="@routes.Assets.versioned("images/favicon.png")">
+        <script src="@routes.Assets.versioned("javascripts/hello.js")" type="text/javascript"></script>
+        <script src="http://code.jquery.com/jquery-1.7.1.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.terminal/1.0.6/js/jquery.terminal.min.js"></script>
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/jquery.terminal/1.0.6/css/jquery.terminal.min.css" rel="stylesheet"/>
+        <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+        .tilda {
+            position: absolute;
+        }
+        </style>
+        <script>
+                jQuery(document).ready(function($) {
+                    $(window).scroll(function() {
+                        $('.tilda').each(function() {
+                            $(this).css({top: $('body').prop('scrollTop')});
+                        });
+                    });
+                });
+        </script>
+        <script>
+
+
+                String.prototype.strip = function(char) {
+                    return this.replace(new RegExp("^" + char + "*"), '').
+                    replace(new RegExp(char + "*$"), '');
+                }
+
+
+                $.extend_if_has = function(desc, source, array) {
+                    for (var i=array.length;i--;) {
+                        if (typeof source[array[i]] != 'undefined') {
+                            desc[array[i]] = source[array[i]];
+                        }
+                    }
+                    return desc;
+                };
+
+
+                (function($) {
+                    $.fn.tilda = function(eval, options) {
+                        if ($('body').data('tilda')) {
+                            return $('body').data('tilda').terminal;
+                        }
+                        this.addClass('tilda');
+                        options = options || {};
+                        eval = eval || function(command, term) {
+                                    term.echo("you don't set eval for tilda");
+                                };
+                        var settings = {
+                            prompt: '~$ ',
+                            name: 'tilda',
+                            height: 600,
+                            enabled: false,
+                            greetings: 'Simulations console',
+                            keypress: function(e) {
+                                if (e.which == 96) {
+                                    return false;
+                                }
+                            }
+                        };
+                        if (options) {
+                            $.extend(settings, options);
+                        }
+                        this.append('<div class="td"></div>');
+                        var self = this;
+                        self.terminal = this.find('.td').terminal(eval, settings);
+                        var focus = false;
+                        $(document.documentElement).keypress(function(e) {
+                            if (e.which == 96) {
+                                self.slideToggle('fast');
+                                self.terminal.focus(focus = !focus);
+                                self.terminal.attr({
+                                    scrollTop: self.terminal.attr("scrollHeight")
+                                });
+                            }
+                        });
+                        $('body').data('tilda', this);
+                        this.hide();
+                        return self;
+                    };
+                })(jQuery);
+
+
+                var queue = {
+                    _timer: null,
+                    _queue: [],
+                    add: function(fn, context, time) {
+                        var setTimer = function(time) {
+                            $.queue._timer = setTimeout(function() {
+                                time = $.queue.add();
+                                if ($.queue._queue.length) {
+                                    setTimer(time);
+                                }
+                            }, time || 2);
+                        }
+
+                        if (fn) {
+                            $.queue._queue.push([fn, context, time]);
+                            if ($.queue._queue.length == 1) {
+                                setTimer(time);
+                            }
+                            return;
+                        }
+
+                        var next = $.queue._queue.shift();
+                        if (!next) {
+                            return 0;
+                        }
+                        next[0].call(next[1] || window);
+                        return next[2];
+                    },
+                    clear: function() {
+                        clearTimeout($.queue._timer);
+                        $.queue._queue = [];
+                    }
+                };
+
+                //--------------------------------------------------------------------------
+                jQuery(document).ready(function($) {
+
+                    var url = window.location.href.replace("http","ws");
+                    var ws = new WebSocket(url + "command");
+
+
+                    var stream = function(jobId) {
+                        var ss = new WebSocket(url + "stream/" + jobId);
+
+                        function appendMessage(text) {
+                            var messageElem = document.createElement("p");
+                            var message = document.createTextNode(text);
+                            messageElem.appendChild(message);
+                            document.getElementById("output").appendChild(messageElem);
+                        }
+
+                        ss.onopen = function() {
+                            appendMessage("JobId: " + jobId + ", Stream of messages opened...");
+                            ss.send("hi");
+                        };
+
+                        ss.onmessage = function (evt) {
+                            queue.add(appendMessage(evt.data),"",2000);
+                        };
+
+                        ss.onclose = function() {
+                            appendMessage("JobId: " + jobId + ", Stream of messages closed...");
+                            queue.clear()
+                        };
+                    };
+
+                    $('#tilda').tilda(function(command, terminal) {
+                        ws.onopen = function() {
+                            terminal.echo("Connection is established");
+                        };
+
+                        ws.onmessage = function (evt) {
+                            var received_msg = evt.data;
+                            if(received_msg.includes("attachjobpacket")) {
+                                stream(received_msg.split(" ")[1]);
+                            } else {
+                                terminal.echo(received_msg);
+                            }
+                        };
+
+                        ws.onclose = function() {
+                            terminal.echo("Connection is closed...");
+                        };
+
+                        if(command.includes("attachJob")) {
+                            stream(command.split(" ")[1]);
+                        } else {
+                            ws.send(command);
+                        }
+                    });
+
+
+
+                });
+
+        </script>
+    </head>
+    <body>
+        @* And here's where we render the `Html` object containing
+         * the page content. *@
+        @content
+    </body>
+</html>

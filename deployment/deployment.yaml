@@ -1,29 +1,7 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: tytanis
-spec:
-  ports:
-    - port: 9000
-  selector:
-    app: tytanis
-  clusterIP: LoadBalancer
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tytanis-pv-claim
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
----
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: 
+  name: tytanis
 spec:
   strategy:
     type: Recreate
@@ -33,21 +11,24 @@ spec:
         app: tytanis
     spec:
       containers:
-      - image: eu.gcr.io/bigdata-1275/tytanis:1.0-SNAPSHOT
-	command: ["bin/tytanis", "-Dconfig.file=/etc/tytanis/application.conf"]
-        name: tytanis
-        ports:
-        - containerPort: 9000
+        - image: eu.gcr.io/bigdata-1275/tytanis:1.0-SNAPSHOT
+          command: ["bin/tytanis", "-Dconfig.file=/etc/tytanis/application.conf"]
           name: tytanis
-        volumeMounts:
-        - name: tytanis-persistent-storage
-          mountPath: /var/lib/tytanis/db
-        - name: config-volume
-          mountPath: /etc/tytanis
+          imagePullPolicy: Always
+          ports:
+          - containerPort: 9000
+          name: tytanis
+          volumeMounts:
+          - name: tytanis-persistent-storage
+            mountPath: /var/lib/tytanis/db
+          - name: config-volume
+            mountPath: /etc/tytanis
+      nodeSelector:
+                  failure-domain.beta.kubernetes.io/zone: europe-west1-d
       volumes:
-      - name: tytanis-persistent-storage
-        persistentVolumeClaim:
-          claimName: tytanis-pv-claim
-      - name: config-volume
-          configMap:
-            name: tytanis-config
+         - name: tytanis-persistent-storage
+           persistentVolumeClaim:
+              claimName: tytanis-pv-claim
+         - name: config-volume
+           configMap:
+              name: tytanis-config
